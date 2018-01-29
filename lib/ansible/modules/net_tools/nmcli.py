@@ -434,6 +434,22 @@ EXAMPLES = '''
       type: ethernet
       state: present
 
+# To disable the ipv4 connection:
+  - nmcli:
+      type: vlan
+      conn_name: my-eth1
+      ifname: eth1
+      ip4: disabled
+      state: present
+
+# To disable ipv6 connection:
+   - nmcli:
+       type: vlan
+       conn_name: my-eth1
+       ifname: eth1
+       ip6: ignore
+       state: present
+
 # nmcli exits with status 0 if it succeeds and exits with a status greater
 # than zero when there is a failure. The following list of status codes may be
 # returned:
@@ -1145,11 +1161,30 @@ class Nmcli(object):
             cmd = self.modify_connection_vlan()
         elif self.type == 'generic':
             cmd = self.modify_connection_ethernet(conn_type='generic')
+
         if cmd:
+            # If no dns given, then we assume that IPv4/IPv6 is not used on the interface
+            # so we are going to disable the protocol, otherwise interface won't come up.
+
+            if self.ip4 == 'disabled':
+                self.execute_command(cmd)
+                cmd = self.modify_conn_disable_ipv4_or_ipv6()
+
+            if self.ip6 == 'ignore':
+                self.execute_command(cmd)
+                cmd = self.modify_conn_disable_ipv4_or_ipv6(ipv4=False)
             return self.execute_command(cmd)
         else:
             self.module.fail_json(msg="Type of device or network connection is required "
                                       "while performing 'modify' operation. Please specify 'type' as an argument.")
+
+    def modify_conn_disable_ipv4_or_ipv6(self, ipv4=True):
+        if ipv4:
+            cmd = [self.nmcli_bin, 'con', 'mod', self.conn_name, 'ipv4.method', 'disabled']
+            return cmd
+        else:
+            cmd = [self.nmcli_bin, 'con', 'mod', self.conn_name, 'ipv6.method', 'ignore']
+            return cmd
 
 
 def main():
